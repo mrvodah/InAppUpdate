@@ -4,11 +4,17 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        flatDir {
+            dirs 'libs'
+        }
     }
     dependencies {
         classpath "com.android.tools.build:gradle:4.2.1"
         classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.6.21'
         classpath 'com.google.gms:google-services:4.3.13'
+//        classpath(":mobile-seitc-android-hce-sdk-6.36.0-sp3-finalize:") {
+//            transitive = false
+//        }
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }
@@ -19,6 +25,9 @@ allprojects {
         google()
         mavenCentral()
         maven { url 'https://jitpack.io' }
+        flatDir {
+            dirs 'libs'
+        }
     }
 }
 
@@ -30,7 +39,7 @@ subprojects {
     project.configurations.all {
         resolutionStrategy.eachDependency { details ->
             if (details.requested.group == 'com.android.support'
-                    && !details.requested.name.contains('multidex') ) {
+                    && !details.requested.name.contains('multidex')) {
                 details.useVersion "26.1.0"
             }
         }

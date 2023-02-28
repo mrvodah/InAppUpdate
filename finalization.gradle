@@ -1,0 +1,61 @@
+import org.apache.tools.ant.taskdefs.condition.Os
+
+def sdkHome = android.getSdkDirectory().getAbsolutePath()
+// Command line finalizer location from GUARDIT_HOME
+def finPath = "$rootDir/tools"
+def keyStoreFile = file("$rootDir/debug.keystore")
+
+tasks.create(name: "cmdLineFinalization"){
+    android.applicationVariants.all { variant ->
+            doLast {
+                String type = variant.buildType.name.toString(); //Release or Debug
+
+                def androidPackageDir = "$buildDir/outputs/bundle/$type"
+                def androidPackageName = "referene-app-$flavor-$type"
+                def androidPackageType = "aab"
+                String finFileName = "";
+                new File("$buildDir/outputs/fin/$type").eachFileMatch(~/.*.fin/) { file -> // there is only one file for each flavor
+                    finFileName = file.getName()
+                }
+
+                def finFile =  "$buildDir/outputs/fin/$type/$finFileName"
+                // Command line finalization for android bundle package
+                exec {
+                    def executableFile;
+                    if (Os.isFamily(Os.FAMILY_WINDOWS)){
+                        executableFile =  "$finPath/finalizer.exe"
+                    } else if (Os.isFamily(Os.FAMILY_MAC)){
+                        executableFile =  "$finPath/finalizer"
+                    } else {
+                        executableFile =  "$finPath/finalizer.sh";
+                    }
+                    executable(executableFile)
+                            .args("-i", "$androidPackageDir/$androidPackageName.$androidPackageType")
+                            .args("-o", androidPackageDir)
+                            .args("-f", finFile)
+                            .args("--verbose")
+                }
+
+                // Aligning finalized android bundle package
+                exec {
+                    executable("$sdkHome/build-tools/$seitcBuildToolsVersion/zipalign")
+                            .args("-v", "-f", "-p", "4")
+                            .args("$androidPackageDir/$androidPackageName-unaligned-unsigned-protected.$androidPackageType")
+                            .args("$androidPackageDir/$androidPackageName-aligned-unsigned-protected.$androidPackageType")
+                }
+
+                // Signing aligned android bundle package
+                exec {
+                    executable("jarsigner")
+                    args("-sigalg", "SHA256withRSA")
+                    args("-digestalg", "SHA-256")
+                    args("-keystore", keyStoreFile)
+                    args("-storepass", ksPassword)
+                    args("-keypass", ksPassword)
+                    args("-signedjar", "$androidPackageDir/$androidPackageName.$androidPackageType", "$androidPackageDir/$androidPackageName-aligned-unsigned-protected.$androidPackageType")
+                    args(keyAlias)
+                }
+            }
+
+    }
+}

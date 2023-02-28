@@ -1,0 +1,84 @@
+// This is provided as a part of guardit package from Arxan and can be found in GuardIT_for_Java_8.1.0\scripts\gradle\extractFinFiles.gradle
+
+def extractFinFile(zip, variant, destFileName) {
+    copy {
+        from zip.matching { include 'guardit4j.fin' }
+        into "${buildDir}/outputs/fin/${variant.name}"
+        rename { filename ->
+            filename.replace 'guardit4j', "${destFileName}"
+        }
+    }
+}
+
+def extractFinFiles() {
+    android.applicationVariants.each { variant ->
+        if (android.hasProperty("dynamicFeatures")) {
+            def rootProjectName = project.rootProject.name
+            android.dynamicFeatures.each { String featureProjectName ->
+                def dynamicFeatureProject = project.rootProject.project(featureProjectName)
+                if (!dynamicFeatureProject.hasProperty("android")) {
+                    // Android configuration is not accessible during project configuration
+                    return
+                }
+
+                def applicationVariant = dynamicFeatureProject.android.applicationVariants.find { applicationVariant ->
+                    applicationVariant.name == variant.name
+                }
+
+                if (!applicationVariant) {
+                    return
+                }
+
+                def compileConfiguration = applicationVariant.compileConfiguration
+                compileConfiguration.resolvedConfiguration.firstLevelModuleDependencies.each { dependency ->
+                    // This checks whether dependency is an application module itself
+                    if (dependency.moduleGroup == rootProjectName && dependency.moduleName == project.name) {
+                        return
+                    }
+
+                    dependency.moduleArtifacts.each { artifact ->
+                        File dependencyFile = artifact.file
+                        if (dependencyFile.name.endsWith(".aar")) {
+                            def aarZip = zipTree(dependencyFile)
+                            extractFinFile(aarZip, variant, dependencyFile.name.substring(0, dependencyFile.name.lastIndexOf('.')))
+                            aarZip.files.each { fileFromAar ->
+                                if (fileFromAar.name == "classes.jar") {
+                                    def classesJarZip = zipTree(fileFromAar)
+                                    extractFinFile(classesJarZip, variant, dependencyFile.name.substring(0, dependencyFile.name.lastIndexOf('.')))
+                                }
+                            }
+                        } else if (dependencyFile.name.endsWith(".jar")) {
+                            def jarZip = zipTree(dependencyFile)
+                            extractFinFile(jarZip, variant, dependencyFile.name.substring(0, dependencyFile.name.lastIndexOf('.')))
+                        }
+                    }
+                }
+            }
+        }
+
+        def files = variant.compileConfiguration.files
+        files.each { file ->
+            if (file.name.endsWith(".aar")) {
+                def aarZip = zipTree(file)
+                extractFinFile(aarZip, variant, file.name.substring(0, file.name.lastIndexOf('.')))
+                aarZip.files.each { fileFromAar ->
+                    if (fileFromAar.name == "classes.jar") {
+                        def classesJarZip = zipTree(fileFromAar)
+                        extractFinFile(classesJarZip, variant, file.name.substring(0, file.name.lastIndexOf('.')))
+                    }
+                }
+            } else if (file.name.endsWith(".jar")) {
+                def jarZip = zipTree(file)
+                extractFinFile(jarZip, variant, file.name.substring(0, file.name.lastIndexOf('.')))
+            }
+        }
+    }
+}
+
+project.afterEvaluate {
+    extractFinFiles()
+}
+
+clean.doLast {
+    extractFinFiles()
+}
